@@ -1,0 +1,15 @@
+{
+    "name": "RHEL-8-STIG",
+    "description": "RHEL DIA Stig",
+    "local_path": "",
+    "scm_type": "git",
+    "scm_url": "git@gitlab.com:mindpointgroup/lockdown-enterprise/rhel-8-stig.git",
+    "scm_branch": "georgen",
+    "scm_clean": true,
+    "scm_delete_on_update": false,
+    "credential": 3,
+    "timeout": 0,
+    "organization": 1,
+    "scm_update_on_launch": true,
+    "scm_update_cache_timeout": 0
+}

@@ -1,0 +1,261 @@
+---
+- name: New Centos8 vagrant image needs epel
+  yum:
+    name: epel-release
+    state: latest
+
+- name: check if we need to do installer things
+  uri:
+    url: https://localhost/api/v2/ping/
+    method: GET
+    user: admin
+    password: "{{ towerpass }}"
+    validate_certs: False
+    force_basic_auth: yes
+  register: checkout
+  ignore_errors: True
+
+- name: set condtional if the above didn't error
+  set_fact:
+    towerchk: "{{ checkout.json.version }}"
+  when: checkout.json is defined
+
+- name: download tower installer
+  get_url:
+    url: https://releases.ansible.com/ansible-tower/setup/ansible-tower-setup-{{ towerversion }}.tar.gz
+    dest: /tmp/ansible-tower-setup-{{ towerversion }}.tar.gz
+    mode: 0640
+  when: towerchk != towerversion
+
+- name: extract installer
+  unarchive:
+    src: /tmp/ansible-tower-setup-{{ towerversion }}.tar.gz
+    dest: /tmp/
+    remote_src: True
+  when: towerchk != towerversion
+
+- name: template inventory file
+  template:
+    src: inventory
+    dest: /tmp/ansible-tower-setup-{{ towerversion }}/inventory
+  when: towerchk != towerversion
+
+- name: run the tower installer
+  shell: ./setup.sh chdir=/tmp/ansible-tower-setup-{{ towerversion }}
+  when: towerchk != towerversion
+
+- name: wait for tower to be up
+  uri:
+    url: https://localhost/api/v2/ping/
+    method: GET
+    user: admin
+    password: "{{ towerpass }}"
+    validate_certs: False
+    force_basic_auth: yes
+  register: check2
+  until: check2.json is defined and check2.json.version == towerapiversion
+  retries: 10
+  delay: 30
+  when: towerchk != towerversion
+
+
+- name: Post license key
+  uri:
+    url: https://localhost/api/v2/config/
+    method: POST
+    user: admin
+    password: "{{ towerpass }}"
+    body: "{{ lookup('file','tower_license.json') }}"
+    body_format: json
+    validate_certs: False
+    force_basic_auth: yes
+
+- name: copy ansible hosts file
+  template:
+    src: "vagrant_hosts"
+    dest: /etc/ansible/hosts
+
+- name: create vagrant inventory
+  uri:
+    url: https://localhost/api/v2/inventories/
+    method: POST
+    user: admin
+    password: "{{ towerpass }}"
+    body: "{{ lookup('file','tower_vagrant_inventory.json') }}"
+    body_format: json
+    validate_certs: False
+    force_basic_auth: yes
+    status_code:
+      - 200
+      - 201
+      - 400
+  register: response
+  changed_when: response.status == 201
+
+
+- name: import inventory to Tower demo inventory
+  shell: tower-manage inventory_import --source=/etc/ansible/hosts --inventory-id=2
+
+- name: create vagrant ssh machine credential
+  uri:
+    url: https://localhost/api/v2/credentials/
+    method: POST
+    user: admin
+    password: "{{ towerpass }}"
+    body: "{{ lookup('file','tower_vagrant_machine_credential.json') }}"
+    body_format: json
+    validate_certs: False
+    force_basic_auth: yes
+    status_code:
+      - 200
+      - 201
+  register: response
+  changed_when: response.status == 201
+
+- name: create TOWER SCM credential
+  uri:
+    url: https://localhost/api/v2/credentials/
+    method: POST
+    user: admin
+    password: "{{ towerpass }}"
+    body: "{{ lookup('file','tower_scm_credential.json') }}"
+    body_format: json
+    validate_certs: False
+    force_basic_auth: yes
+    status_code:
+      - 200
+      - 201
+  register: response
+  changed_when: response.status == 201
+
+# - name: Create a carnells SCM credential from a private_key file
+#   tower_credential:
+#     name: SCM Credential
+#     organization: Default
+#     state: present
+#     kind: scm
+#     username: carnells
+#     password:
+#     ssh_key_data: "{{ lookup ('file', 'files/Pri_key') }}"
+#     ssh_key_unlock: ""
+
+- name: place private ssh key file
+  get_url:
+    url: https://raw.githubusercontent.com/hashicorp/vagrant/master/keys/vagrant
+    dest: /var/lib/awx/.ssh/id_rsa
+    owner: awx
+    group: awx
+    mode: 0400
+
+- name: template the bash profile file for awx user
+  template:
+    src: "bash_profile"
+    dest: /var/lib/awx/.bash_profile
+    owner: awx
+    group: awx
+    mode: 0644
+
+- name: create project
+  uri:
+    url:  https://localhost/api/v2/projects/
+    method: POST
+    user: admin
+    password: "{{ towerpass }}"
+    body: "{{ lookup('file','tower_project.json') }}"
+    body_format: json
+    validate_certs: False
+    force_basic_auth: yes
+    status_code:
+      - 200
+      - 201
+      - 400
+  register: responseproj
+  changed_when: responseproj.status == 201
+
+# - name: credential job templates
+#   uri:
+#     url: "https://localhost/api/v2/job_templates/{{ item.results[0].json.results[0].id }}/credentials/"
+#     method: POST
+#     user: admin
+#     password: "{{ towerpass }}"
+#     body_format: json
+#     body: >
+#       {
+#         "id": {{ credential.results[name_vagrantssh].json.results[0].id | int }}
+#       }
+#     validate_certs: False
+#     force_basic_auth: yes
+#     status_code:
+#       - 200
+#       - 201
+#       - 202
+#       - 204
+#   register: response
+#   changed_when: response.status == 201 or response.status == 202 or response.status == 204
+#   when: responseproj.status == 201
+#   # with_items:
+#   #     - "{{ jobresults }}"
+
+- name: create initial deploy job template
+  uri:
+    url:  https://localhost/api/v2/job_templates/
+    method: POST
+    user: admin
+    password: "{{ towerpass }}"
+    body: "{{ lookup('file','tower_job_template.json') }}"
+    body_format: json
+    validate_certs: False
+    force_basic_auth: yes
+    status_code:
+      - 200
+      - 201
+      - 202
+  register: response
+  until: response.status == 201 or response.status == 202
+  retries: 10
+  delay: 30
+  changed_when: response.status == 201 or response.status == 202
+  when: responseproj.status == 201
+
+- name: credential job templates
+  uri:
+    url: "https://localhost/api/v2/job_templates/10/credentials/"
+    method: POST
+    user: admin
+    password: "{{ towerpass }}"
+    body_format: json
+    body: >
+      {
+        "id": 2
+      }
+    validate_certs: False
+    force_basic_auth: yes
+    status_code:
+      - 200
+      - 201
+      - 202
+      - 204
+  register: response
+  changed_when: response.status == 201 or response.status == 202 or response.status == 204
+
+
+# - name: create rolling update job template
+#   uri:
+#     url:  https://localhost/api/v2/job_templates/
+#     method: POST
+#     user: admin
+#     password: "{{ towerpass }}"
+#     body: "{{ lookup('file','tower_job_template_ru.json') }}"
+#     body_format: json
+#     validate_certs: False
+#     force_basic_auth: yes
+#     status_code:
+#       - 200
+#       - 201
+#       - 202
+#   register: response
+#   until: response.status == 201 or response.status == 202
+#   retries: 10
+#   delay: 30
+#   changed_when: response.status == 201 or response.status == 202
+#   when: responseproj.status == 201

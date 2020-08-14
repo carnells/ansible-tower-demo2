@@ -1,0 +1,11 @@
+---
+- name: Provision Demo Environment
+  hosts: all
+  become: true
+  vars:
+    towerpass: password1
+    ldaplicense: False
+
+  roles:
+    - { role: vagrant-common, when "'tag_Vagrant_True' in group_names" }
+    - { role: tower, when: "'tag_Name_Tower' in group_names" }
