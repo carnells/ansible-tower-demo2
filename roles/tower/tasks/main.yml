@@ -41,7 +41,7 @@
   when: towerchk != towerversion
 
 - name: run the tower installer
-  shell: ./setup.sh chdir=/tmp/ansible-tower-setup-latest.tar.gz
+  shell: ./setup.sh chdir=/tmp/ansible-tower-setup-3.8.3-2
   when: towerchk != towerversion
 
 - name: wait for tower to be up
