@@ -37,7 +37,7 @@
 - name: template inventory file
   template:
     src: inventory
-    dest: /tmp/ansible-tower-setup-latest/inventory
+    dest: /tmp/ansible-tower-setup-3.8.3-2/inventory
   when: towerchk != towerversion
 
 - name: run the tower installer
