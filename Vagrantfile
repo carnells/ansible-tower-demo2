@@ -8,24 +8,24 @@ Vagrant.configure("2") do |cluster|
 
   # Every Vagrant virtual environment requires a box to build off of.
 
-cluster.vm.define "ldapvm" do |config|
-  config.vm.box = "generic/centos8"
-  config.ssh.insert_key = false
-  config.vm.provider :virtualbox do |vb, override|
-    vb.customize ["modifyvm", :id, "--memory", "512"]
-    vb.customize ["modifyvm", :id, "--cpus", "1"]
-  end
-  config.vm.hostname = "ldapvm"
-  config.vm.network :private_network, ip: "172.16.2.9"
-  config.vm.provision "ansible" do |ansible|
-    ansible.playbook = "site.yml"
-    ansible.groups = {
-      "tag_Vagrant_True" => ["ldapvm"],
-      "tag_Vagrant_local" => ["ldapvm"],
-      "tag_Name_ldapvm" => ["ldapvm"],
-    }
-  end
-end
+# cluster.vm.define "ldapvm" do |config|
+#   config.vm.box = "generic/centos8"
+#   config.ssh.insert_key = false
+#   config.vm.provider :virtualbox do |vb, override|
+#     vb.customize ["modifyvm", :id, "--memory", "512"]
+#     vb.customize ["modifyvm", :id, "--cpus", "1"]
+#   end
+#   config.vm.hostname = "ldapvm"
+#   config.vm.network :private_network, ip: "172.16.2.9"
+#   config.vm.provision "ansible" do |ansible|
+#     ansible.playbook = "site.yml"
+#     ansible.groups = {
+#       "tag_Vagrant_True" => ["ldapvm"],
+#       "tag_Vagrant_local" => ["ldapvm"],
+#       "tag_Name_ldapvm" => ["ldapvm"],
+#     }
+#   end
+# end
 
 cluster.vm.define "tower" do |config|
   config.vm.box = "generic/centos8"
